@@ -31,6 +31,10 @@ client.once('ready', () => {
     client.user.setActivity('!help | Magyar Bot', { type: 'PLAYING' });
 });
 
+// Hibakezelés
+client.on('error', console.error);
+client.on('warn', console.warn);
+
 // Üdvözlő üzenet
 client.on('guildMemberAdd', (member) => {
     const channel = member.guild.channels.cache.find(ch => ch.name === 'általános' || ch.name === 'üdvözlő');
@@ -144,7 +148,10 @@ client.on('messageCreate', async (message) => {
             if (!user) return message.reply('❌ Jelölj meg egy felhasználót!');
             user.kick().then(() => {
                 message.reply(`✅ **${user.user.tag}** kirúgva!`);
-            }).catch(err => message.reply('❌ Nem sikerült kirúgni!'));
+            }).catch(err => {
+                console.error('Kick error:', err);
+                message.reply('❌ Nem sikerült kirúgni! (Lehet, hogy nincs jogod vagy magasabb a szerepkörje)');
+            });
         },
 
         ban: () => {
@@ -155,7 +162,10 @@ client.on('messageCreate', async (message) => {
             if (!user) return message.reply('❌ Jelölj meg egy felhasználót!');
             user.ban().then(() => {
                 message.reply(`✅ **${user.user.tag}** kitiltva!`);
-            }).catch(err => message.reply('❌ Nem sikerült kitiltani!'));
+            }).catch(err => {
+                console.error('Ban error:', err);
+                message.reply('❌ Nem sikerült kitiltani! (Lehet, hogy nincs jogod vagy magasabb a szerepkörje)');
+            });
         },
 
         mute: () => {
@@ -166,7 +176,10 @@ client.on('messageCreate', async (message) => {
             if (!user) return message.reply('❌ Jelölj meg egy felhasználót!');
             user.timeout(60000 * 10).then(() => {
                 message.reply(`✅ **${user.user.tag}** némítva 10 percre!`);
-            }).catch(err => message.reply('❌ Nem sikerült némítani!'));
+            }).catch(err => {
+                console.error('Mute error:', err);
+                message.reply('❌ Nem sikerült némítani! (Lehet, hogy nincs jogod vagy magasabb a szerepkörje)');
+            });
         },
 
         warn: () => {
@@ -188,37 +201,60 @@ client.on('messageCreate', async (message) => {
 
         kviz: () => {
             const questions = [
-                { q: 'Mi Franciaország fővárosa?', a: 'párizs' },
-                { q: 'Mennyi 5 + 7?', a: '12' },
-                { q: 'Mi a legnagyobb bolygó a Naprendszerben?', a: 'jupiter' },
-                { q: 'Hány nap van egy évben?', a: '365' },
-                { q: 'Mi a víz képlete?', a: 'h2o' },
-                { q: 'Ki írta a Hungarikumot?', a: 'petőfi' }
+                { q: 'Mi Franciaország fővárosa?', a: ['párizs', 'paris'] },
+                { q: 'Mennyi 5 + 7?', a: ['12'] },
+                { q: 'Mi a legnagyobb bolygó a Naprendszerben?', a: ['jupiter'] },
+                { q: 'Hány nap van egy évben?', a: ['365'] },
+                { q: 'Mi a víz képlete?', a: ['h2o', 'h2o', 'H2O'] },
+                { q: 'Ki írta a Himnuszt?', a: ['kölcsey', 'kölcsey ferenc'] }
             ];
             const q = questions[Math.floor(Math.random() * questions.length)];
             message.reply(`🧠 **Kérdés:** ${q.q}\n*Tipp: írd be a választ!*`);
 
+            let answered = false;
             const collector = message.channel.createMessageCollector({ time: 15000 });
             collector.on('collect', m => {
-                if (m.content.toLowerCase().includes(q.a)) {
+                if (answered) return;
+                const userAnswer = m.content.toLowerCase().trim();
+                if (q.a.some(answer => userAnswer === answer || userAnswer.includes(answer))) {
+                    answered = true;
                     m.reply('✅ **Helyes válasz!** Gratulálok!');
                     collector.stop();
                 }
             });
-            collector.on('end', () => {
-                message.reply(`⏱️ Lejárt az idő! A helyes válasz: **${q.a}**`);
+            collector.on('end', (collected, reason) => {
+                if (reason === 'time' && !answered) {
+                    message.reply(`⏱️ Lejárt az idő! A helyes válasz: **${q.a[0]}**`);
+                }
             });
         },
 
         trivia: () => {
             const trivias = [
-                { q: 'Hány állama van az USA-nak?', a: '50' },
-                { q: 'Mi a leggyorsabb állat a szárazföldön?', a: 'leopárd' },
-                { q: 'Melyik évben volt Holdra szállás?', a: '1969' },
-                { q: 'Mi a leghosszabb folyó a világon?', a: 'amazonas' }
+                { q: 'Hány állama van az USA-nak?', a: ['50'] },
+                { q: 'Mi a leggyorsabb állat a szárazföldön?', a: ['leopárd', ' gepárd', 'cheetah'] },
+                { q: 'Melyik évben volt Holdra szállás?', a: ['1969'] },
+                { q: 'Mi a leghosszabb folyó a világon?', a: ['amazonas', 'amazon'] }
             ];
             const t = trivias[Math.floor(Math.random() * trivias.length)];
-            message.reply(`❓ **Trivia:** ${t.q}`);
+            message.reply(`❓ **Trivia:** ${t.q}\n*Tipp: írd be a választ!*`);
+
+            let answered = false;
+            const collector = message.channel.createMessageCollector({ time: 20000 });
+            collector.on('collect', m => {
+                if (answered) return;
+                const userAnswer = m.content.toLowerCase().trim();
+                if (t.a.some(answer => userAnswer.includes(answer))) {
+                    answered = true;
+                    m.reply('✅ **Helyes válasz!** Gratulálok!');
+                    collector.stop();
+                }
+            });
+            collector.on('end', (collected, reason) => {
+                if (reason === 'time' && !answered) {
+                    message.reply(`⏱️ Lejárt az idő! A helyes válasz: **${t.a[0]}**`);
+                }
+            });
         },
 
         // Szavazás
@@ -278,4 +314,8 @@ client.on('messageCreate', async (message) => {
 });
 
 // Bot indítása
-client.login(process.env.DISCORD_TOKEN);
+client.login(process.env.DISCORD_TOKEN).catch(err => {
+    console.error('❌ Nem sikerült bejelentkezni a bottal! Ellenőrizd a DISCORD_TOKEN-t!');
+    console.error(err);
+    process.exit(1);
+});
